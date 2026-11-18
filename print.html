@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>名刺印刷プレビュー - PrintGocco</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+U:wght@100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="print.css">
+</head>
+<body>
+  <div class="toolbar no-print">
+    <div class="toolbar-left">
+      <span id="summary"></span>
+      <label class="pattern-picker">
+        <span>「田」デザイン:</span>
+        <select id="pattern-select">
+          <option value="1">1. 朱色「田」落款（スタンプ）風</option>
+          <option value="2">2. 上下ライン連動「田」ステップ</option>
+          <option value="3">3. 透かし大「田」ウォーターマーク</option>
+          <option value="4">4. Gopherカラー4色「田」タイル</option>
+          <option value="5">5. ライン割り込み「田」エンブレム</option>
+          <option value="6">6. 大小「田」シンボルの散らし小紋</option>
+          <option value="7">7. 和モダン組子風「田」コーナー</option>
+          <option value="8">8. 下部3連「田」マーカー＆バッジ装飾</option>
+          <option value="9">9. 45度ダイヤ型「田」クレスト</option>
+          <option value="10">10. 二重畦道ライン＆田んぼグリッド</option>
+          <option value="11" selected>11. 透かし大「田」＋散らし小紋（左下10色ランダム）</option>
+        </select>
+      </label>
+    </div>
+    <button id="print-btn" type="button">印刷する (A4縦)</button>
+  </div>
+  <main id="sheets"></main>
+  <script src="print.js"></script>
+</body>
+</html>

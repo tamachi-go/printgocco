@@ -1,0 +1,42 @@
+name: Package and Release Extension
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Package Chrome Extension as zip
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME}"
+          ZIP_NAME="printgocco-${TAG_NAME}.zip"
+          zip -r "${ZIP_NAME}" \
+            manifest.json \
+            popup.html \
+            popup.js \
+            print.html \
+            print.css \
+            print.js \
+            assets/
+          echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: ${{ env.ZIP_NAME }}
+
+      - name: Create GitHub Release with zip
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP_NAME }}
+          generate_release_notes: true

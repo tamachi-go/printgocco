@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "PrintGocco - connpass 名刺印刷",
+  "version": "0.1.0",
+  "description": "connpassの参加者一覧をA4縦の名刺サイズ（91mm×55mm・10面）に並べて印刷するChrome拡張機能",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "参加者名刺を印刷"
+  }
+}

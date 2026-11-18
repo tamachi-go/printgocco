@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>PrintGocco</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+U:wght@100..900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      width: 260px;
+      margin: 0;
+      padding: 12px;
+      font-family: "M PLUS U", sans-serif;
+      font-size: 13px;
+      color: #222;
+    }
+    h1 {
+      font-size: 15px;
+      margin: 0 0 8px;
+    }
+    #status {
+      margin: 8px 0 12px;
+      color: #555;
+    }
+    button {
+      width: 100%;
+      padding: 8px 12px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: bold;
+      color: #fff;
+      background: #c8161d;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <h1>PrintGocco</h1>
+  <div id="status">参加者を取得中...</div>
+  <button id="open-print" disabled>名刺印刷ページを開く</button>
+  <script src="popup.js"></script>
+</body>
+</html>
