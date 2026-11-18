@@ -72,23 +72,32 @@ def build_participants(count: int) -> list[dict[str, str]]:
             role = "Speaker"
         else:
             role = "Listener"
+
+        socials = []
+        if i % 3 == 0:
+            socials.append({"type": "github", "username": f"{user_id}_gh"})
+            socials.append({"type": "twitter", "username": user_id})
+        elif i % 3 == 1:
+            socials.append({"type": "github", "username": user_id})
+
         result.append(
             {
                 "id": user_id,
                 "name": display_name,
                 "iconUrl": icon_url,
                 "role": role,
+                "socials": socials,
             }
         )
     return result
 
 
-def render_rows(users: list[dict[str, str]]) -> str:
+def render_rows(users: list[dict[str, object]]) -> str:
     rows = []
     for user in users:
-        escaped_id = html.escape(user["id"])
-        escaped_name = html.escape(user["name"])
-        icon_url = user.get("iconUrl", "")
+        escaped_id = html.escape(str(user["id"]))
+        escaped_name = html.escape(str(user["name"]))
+        icon_url = str(user.get("iconUrl", ""))
         img_html = (
             f'<a class="image_link" href="/user/{escaped_id}/">'
             f'<img src="{html.escape(icon_url)}" width="40" height="40" alt="{escaped_name}">'
@@ -96,6 +105,17 @@ def render_rows(users: list[dict[str, str]]) -> str:
             if icon_url
             else ""
         )
+        social_links = []
+        for s in user.get("socials", []):
+            if s["type"] == "twitter":
+                social_links.append(
+                    f'<a href="https://twitter.com/intent/user?screen_name={html.escape(s["username"])}">X</a>'
+                )
+            elif s["type"] == "github":
+                social_links.append(
+                    f'<a href="https://github.com/{html.escape(s["username"])}">GitHub</a>'
+                )
+        social_td = f'<td class="social">{" ".join(social_links)}</td>'
         rows.append(
             f"""          <tr class="user">
             <td class="user_info">
@@ -104,6 +124,7 @@ def render_rows(users: list[dict[str, str]]) -> str:
                 <a href="/user/{escaped_id}/">{escaped_name}</a>
               </p>
             </td>
+            {social_td}
           </tr>"""
         )
     return "\n".join(rows)
@@ -253,7 +274,12 @@ def generate_sample_files(count: int) -> None:
 
     participants_json = {
         "participants": [
-            {"name": u["name"], "iconUrl": u["iconUrl"], "role": u["role"]}
+            {
+                "name": u["name"],
+                "iconUrl": u["iconUrl"],
+                "role": u["role"],
+                "socials": u.get("socials", []),
+            }
             for u in users
         ],
     }

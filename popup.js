@@ -73,77 +73,91 @@ async function extractParticipantsFromDOM() {
     return "Listener";
   }
 
-  function parseHighResAvatarFromProfileHtml(html, username, baseUrl) {
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const candidates = [];
+  function parseSocialLink(a, baseUrl) {
+    const rawHref = a.getAttribute("href") || "";
+    if (!rawHref) return null;
 
-    for (const img of doc.querySelectorAll("img")) {
-      // ヘッダー・フッター内のログイン中ユーザーアイコン等を除外
-      if (
-        img.closest(
-          "header, #header, .header_area, nav, .global_header, footer, #footer"
-        )
-      ) {
-        continue;
-      }
-      // イベント一覧やグループ一覧内のサムネイルを除外
-      if (
-        img.closest(
-          ".event_list, .group_list, .schedule_area, .concerned_area, .participation_table_area"
-        )
-      ) {
-        continue;
-      }
+    let url;
+    try {
+      url = new URL(rawHref, baseUrl || location.origin);
+    } catch {
+      return null;
+    }
 
+    const host = url.hostname.toLowerCase();
+    const img = a.querySelector("img");
+    let iconUrl = "";
+    if (img) {
       const rawSrc = img.getAttribute("src") || "";
-      if (!rawSrc || !rawSrc.includes("/thumbs/") || rawSrc.includes("connpass_logo")) {
-        continue;
-      }
-
-      const parentLink = img.closest("a[href]");
-      if (parentLink) {
+      if (rawSrc) {
         try {
-          const linkUrl = new URL(parentLink.getAttribute("href"), baseUrl);
-          // イベントへのリンク画像は除外
-          if (linkUrl.pathname.includes("/event/")) continue;
-          // グループトップページへのリンク画像は除外
-          if (linkUrl.pathname === "/" || linkUrl.pathname === "") continue;
-          // 別ユーザーへのリンク画像は除外
-          if (
-            username &&
-            linkUrl.pathname.includes("/user/") &&
-            !linkUrl.pathname.toLowerCase().includes(`/user/${username.toLowerCase()}`)
-          ) {
-            continue;
-          }
+          iconUrl = new URL(rawSrc, baseUrl || location.origin).href;
         } catch {
-          // ignore URL parse error
+          iconUrl = rawSrc;
         }
       }
+    }
 
-      let resolvedSrc = rawSrc;
-      try {
-        resolvedSrc = new URL(rawSrc, baseUrl).href;
-      } catch {
-        resolvedSrc = rawSrc;
+    if (
+      host === "twitter.com" ||
+      host === "www.twitter.com" ||
+      host === "x.com" ||
+      host === "www.x.com"
+    ) {
+      const screenName = url.searchParams.get("screen_name");
+      if (screenName) {
+        return { type: "twitter", username: screenName.trim(), iconUrl };
       }
-
-      candidates.push(resolvedSrc);
+      const parts = url.pathname.replace(/^\/+|\/+$/g, "").split("/");
+      const first = parts[0] || "";
+      if (
+        first &&
+        !["intent", "share", "home", "search", "hashtag", "i"].includes(
+          first.toLowerCase()
+        )
+      ) {
+        return { type: "twitter", username: first.trim(), iconUrl };
+      }
+      return null;
     }
 
-    if (candidates.length > 0) {
-      return candidates[0];
+    if (host === "github.com" || host === "www.github.com") {
+      const parts = url.pathname.replace(/^\/+|\/+$/g, "").split("/");
+      const first = parts[0] || "";
+      if (first) {
+        return { type: "github", username: first.trim(), iconUrl };
+      }
+      return null;
     }
 
-    const ogImage =
-      doc.querySelector("meta[property='og:image']")?.getAttribute("content") ||
-      doc.querySelector("meta[name='twitter:image']")?.getAttribute("content") ||
-      "";
-    if (ogImage && ogImage.includes("/thumbs/") && !ogImage.includes("connpass_logo")) {
-      return ogImage;
-    }
+    return null;
+  }
 
-    return "";
+  function extractSocialsFromElement(root, selector, baseUrl) {
+    const socials = [];
+    const seen = new Set();
+    for (const a of root.querySelectorAll(selector)) {
+      const item = parseSocialLink(a, baseUrl);
+      if (!item || !item.username) continue;
+      const k = `${item.type}:${item.username.toLowerCase()}`;
+      if (!seen.has(k)) {
+        seen.add(k);
+        socials.push(item);
+      }
+    }
+    return socials;
+  }
+
+  function mergeSocials(existingSocials, newSocials) {
+    const map = new Map();
+    for (const s of [...(existingSocials || []), ...(newSocials || [])]) {
+      if (!s || !s.username) continue;
+      const k = `${s.type}:${s.username.toLowerCase()}`;
+      if (!map.has(k)) {
+        map.set(k, s);
+      }
+    }
+    return Array.from(map.values());
   }
 
   const participantMap = new Map();
@@ -181,19 +195,27 @@ async function extractParticipantsFromDOM() {
     const key = username ? `user:${username.toLowerCase()}` : `name:${name}`;
 
     let profileUrl = "";
-    if (username) {
-      profileUrl = `${location.origin}/user/${username}/`;
-    } else if (rawHref) {
+    if (rawHref) {
       try {
         profileUrl = new URL(rawHref, location.origin).href;
       } catch {
         profileUrl = "";
       }
     }
+    if (!profileUrl && username) {
+      profileUrl = `https://connpass.com/user/${username}/`;
+    }
 
     const role = detectRoleFromHeaderTitle(headerTitle);
-    const img = row.querySelector("td.user_info img, .image_link img, .user_image img, img");
+    const img = row.querySelector(
+      ".avatar img, td.user_info img, .image_link img, .user_image img, img"
+    );
     const iconUrl = img?.src || "";
+    const socials = extractSocialsFromElement(
+      row,
+      "td.social a[href], .social a[href], a[href*='twitter.com'], a[href*='x.com'], a[href*='github.com']",
+      location.origin
+    );
 
     if (participantMap.has(key)) {
       const existing = participantMap.get(key);
@@ -207,6 +229,7 @@ async function extractParticipantsFromDOM() {
       if (!existing.profileUrl && profileUrl) {
         existing.profileUrl = profileUrl;
       }
+      existing.socials = mergeSocials(existing.socials, socials);
     } else {
       participantMap.set(key, {
         name,
@@ -214,46 +237,68 @@ async function extractParticipantsFromDOM() {
         iconUrl,
         profileUrl,
         role,
+        socials,
         highResResolved: false
       });
     }
   }
 
-  const participants = Array.from(participantMap.values());
+  function extractProfileDataFromHtml(html, baseUrl) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    let avatarUrl = "";
+    const avatarImg = doc.querySelector(".avatar img, img.avatar");
+    if (avatarImg) {
+      const rawSrc =
+        avatarImg.getAttribute("src") || avatarImg.getAttribute("data-src") || "";
+      if (rawSrc) {
+        try {
+          avatarUrl = new URL(rawSrc, baseUrl).href;
+        } catch {
+          avatarUrl = rawSrc;
+        }
+      }
+    }
 
-  // 同一オリジン（現在のconnpassタブ内）からプロフィールページを並列取得して高解像度アイコンに差し替える
-  const targets = participants.filter((p) => p.profileUrl);
+    const socials = extractSocialsFromElement(
+      doc,
+      ".social a[href], .user_info a[href*='twitter.com'], .user_info a[href*='x.com'], .user_info a[href*='github.com']",
+      baseUrl
+    );
+
+    return { avatarUrl, socials };
+  }
+
+  const participants = Array.from(participantMap.values());
+  const targets = participants.filter((p) => p.profileUrl || p.username);
   const CONCURRENCY = 6;
   let cursor = 0;
 
   async function worker() {
     while (cursor < targets.length) {
       const target = targets[cursor++];
-      const urlsToTry = [target.profileUrl];
+      const urlsToTry = [];
       if (target.username) {
-        const mainUrl = `https://connpass.com/user/${target.username}/`;
-        if (!urlsToTry.includes(mainUrl)) {
-          urlsToTry.push(mainUrl);
-        }
+        urlsToTry.push(`${location.origin}/user/${target.username}/`);
       }
-
+      if (target.profileUrl && !urlsToTry.includes(target.profileUrl)) {
+        urlsToTry.push(target.profileUrl);
+      }
       for (const url of urlsToTry) {
         try {
-          const res = await fetch(url, { credentials: "same-origin" });
+          const res = await fetch(url);
           if (!res.ok) continue;
           const html = await res.text();
-          const highRes = parseHighResAvatarFromProfileHtml(
-            html,
-            target.username,
-            url
-          );
-          if (highRes) {
-            target.iconUrl = highRes;
+          const { avatarUrl, socials } = extractProfileDataFromHtml(html, url);
+          if (avatarUrl) {
+            target.iconUrl = avatarUrl;
             target.highResResolved = true;
-            break;
           }
+          if (socials.length > 0) {
+            target.socials = mergeSocials(target.socials, socials);
+          }
+          if (avatarUrl) break;
         } catch {
-          // クロスオリジンリダイレクト等で失敗した場合は print.js 側でリトライ
+          // 拡張機能コンテキスト側 (popup.js / print.js) でフォールバック取得
         }
       }
     }
@@ -264,6 +309,74 @@ async function extractParticipantsFromDOM() {
   );
 
   return participants;
+}
+
+function extractAvatarFromProfileHtml(html, baseUrl) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const avatarImg = doc.querySelector(".avatar img, img.avatar");
+  if (!avatarImg) return "";
+
+  const rawSrc =
+    avatarImg.getAttribute("src") || avatarImg.getAttribute("data-src") || "";
+  if (!rawSrc) return "";
+
+  try {
+    return new URL(rawSrc, baseUrl).href;
+  } catch {
+    return rawSrc;
+  }
+}
+
+async function resolveAvatarForParticipant(participant) {
+  if (participant.highResResolved) return;
+
+  const urlsToTry = [];
+  if (participant.profileUrl) {
+    urlsToTry.push(participant.profileUrl);
+  }
+  if (participant.username) {
+    const connpassUserUrl = `https://connpass.com/user/${participant.username}/`;
+    if (!urlsToTry.includes(connpassUserUrl)) {
+      urlsToTry.push(connpassUserUrl);
+    }
+  }
+
+  for (const url of urlsToTry) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const html = await res.text();
+      const avatarUrl = extractAvatarFromProfileHtml(html, url);
+      if (avatarUrl) {
+        participant.iconUrl = avatarUrl;
+        participant.highResResolved = true;
+        return;
+      }
+    } catch {
+      // ignore and try next candidate
+    }
+  }
+}
+
+async function enrichAvatarsInParallel(participants) {
+  const targets = participants.filter(
+    (p) => (p.profileUrl || p.username) && !p.highResResolved
+  );
+  if (targets.length === 0) return;
+
+  const CONCURRENCY = 6;
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < targets.length) {
+      const target = targets[cursor++];
+      await resolveAvatarForParticipant(target);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, targets.length) }, () => worker())
+  );
 }
 
 function isSupportedUrl(urlString) {
@@ -292,7 +405,6 @@ async function init() {
   }
 
   try {
-    statusEl.textContent = "参加者と高解像度アイコンを取得中...";
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: extractParticipantsFromDOM
@@ -305,12 +417,16 @@ async function init() {
     }
 
     await chrome.storage.local.set({ participants });
-    statusEl.textContent = `${participants.length} 名の参加者を取得しました。`;
+    statusEl.textContent = `${participants.length} 名のアイコンを取得中...`;
     buttonEl.disabled = false;
 
     buttonEl.addEventListener("click", () => {
       chrome.tabs.create({ url: chrome.runtime.getURL("print.html") });
     });
+
+    await enrichAvatarsInParallel(participants);
+    await chrome.storage.local.set({ participants });
+    statusEl.textContent = `${participants.length} 名の参加者を取得しました。`;
   } catch (err) {
     statusEl.textContent = "参加者情報の取得に失敗しました。";
     console.error(err);

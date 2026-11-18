@@ -177,15 +177,51 @@ body {
   border: 0.35mm solid #444;
 }
 
-.card-name {
+.card-main {
   position: relative;
   z-index: 2;
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8mm;
+}
+
+.card-socials {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7mm;
+}
+
+.card-social-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9mm;
+  color: #555;
+  font-family: "M PLUS U", sans-serif;
+  font-size: 8.5pt;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.card-social-icon {
+  width: 3.3mm;
+  height: 3.3mm;
+  flex-shrink: 0;
+  display: block;
+  color: #555;
+}
+
+.card-name {
+  width: 100%;
   font-family: "M PLUS U", sans-serif;
   font-size: 20pt;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.25;
   word-break: break-word;
   overflow-wrap: anywhere;
 }

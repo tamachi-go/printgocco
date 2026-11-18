@@ -34,7 +34,14 @@ function normalizeRole(role, hasName) {
 
 function normalizeParticipant(entry) {
   if (!entry) {
-    return { name: "", username: "", iconUrl: "", profileUrl: "", role: "" };
+    return {
+      name: "",
+      username: "",
+      iconUrl: "",
+      profileUrl: "",
+      role: "",
+      socials: []
+    };
   }
   if (typeof entry === "string") {
     return {
@@ -42,7 +49,8 @@ function normalizeParticipant(entry) {
       username: "",
       iconUrl: "",
       profileUrl: "",
-      role: "Listener"
+      role: "Listener",
+      socials: []
     };
   }
   const name = typeof entry.name === "string" ? entry.name : "";
@@ -52,86 +60,87 @@ function normalizeParticipant(entry) {
     const m = profileUrl.match(/\/user\/([^/?#]+)/);
     if (m) username = m[1];
   }
+  const socials = Array.isArray(entry.socials) ? entry.socials : [];
   return {
     name,
     username,
     iconUrl: typeof entry.iconUrl === "string" ? entry.iconUrl : "",
     profileUrl,
-    role: normalizeRole(entry.role, Boolean(name))
+    role: normalizeRole(entry.role, Boolean(name)),
+    socials
   };
 }
 
-function extractHighResAvatarFromProfileHtml(html, username, baseUrl) {
+function pickPrimarySocial(socials) {
+  if (!Array.isArray(socials) || socials.length === 0) return null;
+  const valid = socials.filter((s) => s && typeof s.username === "string" && s.username.trim());
+  if (valid.length === 0) return null;
+  const xAccount = valid.find((s) => {
+    const t = (s.type || "").toLowerCase();
+    return t === "twitter" || t === "x";
+  });
+  return xAccount || valid[0];
+}
+
+function createSocialIconElement(social) {
+  const ns = "http://www.w3.org/2000/svg";
+  const type = (social?.type || "").toLowerCase();
+
+  if (type === "twitter" || type === "x") {
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.classList.add("card-social-icon");
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("fill", "currentColor");
+    path.setAttribute(
+      "d",
+      "M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+    );
+    svg.appendChild(path);
+    return svg;
+  }
+
+  if (type === "github") {
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.classList.add("card-social-icon");
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("fill", "currentColor");
+    path.setAttribute(
+      "d",
+      "M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z"
+    );
+    svg.appendChild(path);
+    return svg;
+  }
+
+  if (social?.iconUrl) {
+    const img = document.createElement("img");
+    img.className = "card-social-icon";
+    img.src = social.iconUrl;
+    img.alt = "";
+    return img;
+  }
+
+  return null;
+}
+
+function extractAvatarFromProfileHtml(html, baseUrl) {
   const doc = new DOMParser().parseFromString(html, "text/html");
-  const candidates = [];
+  const avatarImg = doc.querySelector(".avatar img, img.avatar");
+  if (!avatarImg) return "";
 
-  for (const img of doc.querySelectorAll("img")) {
-    // ヘッダー・フッター内のログイン中ユーザー自身の小アイコンは除外
-    if (
-      img.closest(
-        "header, #header, .header_area, nav, .global_header, footer, #footer"
-      )
-    ) {
-      continue;
-    }
-    // イベント一覧やグループ一覧のサムネイルは除外
-    if (
-      img.closest(
-        ".event_list, .group_list, .schedule_area, .concerned_area, .participation_table_area"
-      )
-    ) {
-      continue;
-    }
+  const rawSrc =
+    avatarImg.getAttribute("src") || avatarImg.getAttribute("data-src") || "";
+  if (!rawSrc) return "";
 
-    const rawSrc = img.getAttribute("src") || "";
-    if (!rawSrc || !rawSrc.includes("/thumbs/") || rawSrc.includes("connpass_logo")) {
-      continue;
-    }
-
-    const parentLink = img.closest("a[href]");
-    if (parentLink) {
-      try {
-        const linkUrl = new URL(parentLink.getAttribute("href"), baseUrl);
-        // イベントサムネイルを除外
-        if (linkUrl.pathname.includes("/event/")) continue;
-        // グループアイコン（グループトップへのリンク）を除外
-        if (linkUrl.pathname === "/" || linkUrl.pathname === "") continue;
-        // 他のユーザーへのリンクアイコンを除外
-        if (
-          username &&
-          linkUrl.pathname.includes("/user/") &&
-          !linkUrl.pathname.toLowerCase().includes(`/user/${username.toLowerCase()}`)
-        ) {
-          continue;
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    let resolvedSrc = rawSrc;
-    try {
-      resolvedSrc = new URL(rawSrc, baseUrl).href;
-    } catch {
-      resolvedSrc = rawSrc;
-    }
-
-    candidates.push(resolvedSrc);
+  try {
+    return new URL(rawSrc, baseUrl).href;
+  } catch {
+    return rawSrc;
   }
-
-  if (candidates.length > 0) {
-    return candidates[0];
-  }
-
-  const ogImage =
-    doc.querySelector("meta[property='og:image']")?.getAttribute("content") ||
-    doc.querySelector("meta[name='twitter:image']")?.getAttribute("content") ||
-    "";
-  if (ogImage && ogImage.includes("/thumbs/") && !ogImage.includes("connpass_logo")) {
-    return ogImage;
-  }
-
-  return "";
 }
 
 async function fetchHighResIconUrl(profileUrl, username) {
@@ -142,27 +151,28 @@ async function fetchHighResIconUrl(profileUrl, username) {
   }
 
   const urlsToTry = [];
-  if (username) {
-    urlsToTry.push(`https://connpass.com/user/${username}/`);
-  }
-  if (profileUrl && !urlsToTry.includes(profileUrl)) {
+  if (profileUrl) {
     urlsToTry.push(profileUrl);
+  }
+  if (username) {
+    const connpassUserUrl = `https://connpass.com/user/${username}/`;
+    if (!urlsToTry.includes(connpassUserUrl)) {
+      urlsToTry.push(connpassUserUrl);
+    }
   }
 
   for (const url of urlsToTry) {
-    for (const credentialsMode of ["include", "omit"]) {
-      try {
-        const res = await fetch(url, { credentials: credentialsMode });
-        if (!res.ok) continue;
-        const html = await res.text();
-        const highRes = extractHighResAvatarFromProfileHtml(html, username, url);
-        if (highRes) {
-          highResIconCache.set(cacheKey, highRes);
-          return highRes;
-        }
-      } catch {
-        // try next
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const html = await res.text();
+      const highRes = extractAvatarFromProfileHtml(html, url);
+      if (highRes) {
+        highResIconCache.set(cacheKey, highRes);
+        return highRes;
       }
+    } catch {
+      // try next candidate
     }
   }
 
@@ -180,7 +190,7 @@ async function upgradeParticipantIconsToHighRes(participants, imgElementsByKey) 
   );
   if (targets.length === 0) return;
 
-  const CONCURRENCY = 5;
+  const CONCURRENCY = 6;
   let cursor = 0;
   let updatedAny = false;
 
@@ -192,13 +202,15 @@ async function upgradeParticipantIconsToHighRes(participants, imgElementsByKey) 
         target.profileUrl,
         target.username
       );
-      target.highResResolved = true;
-      if (highResUrl && highResUrl !== target.iconUrl) {
-        target.iconUrl = highResUrl;
-        updatedAny = true;
-        const imgs = imgElementsByKey.get(key) || [];
-        for (const imgEl of imgs) {
-          imgEl.src = highResUrl;
+      if (highResUrl) {
+        target.highResResolved = true;
+        if (highResUrl !== target.iconUrl) {
+          target.iconUrl = highResUrl;
+          updatedAny = true;
+          const imgs = imgElementsByKey.get(key) || [];
+          for (const imgEl of imgs) {
+            imgEl.src = highResUrl;
+          }
         }
       }
     }
@@ -391,9 +403,8 @@ function renderSheets(participants) {
     );
 
     for (let i = 0; i < CARDS_PER_PAGE; i++) {
-      const { name, username, iconUrl, profileUrl, role } = normalizeParticipant(
-        slice[i]
-      );
+      const { name, username, iconUrl, profileUrl, role, socials } =
+        normalizeParticipant(slice[i]);
       const card = document.createElement("div");
       card.className = "card";
 
@@ -417,10 +428,37 @@ function renderSheets(participants) {
 
       card.appendChild(headerEl);
 
+      const mainEl = document.createElement("div");
+      mainEl.className = "card-main";
+
+      const primarySocial = pickPrimarySocial(socials);
+      if (name && primarySocial) {
+        const socialsEl = document.createElement("div");
+        socialsEl.className = "card-socials";
+
+        const itemEl = document.createElement("span");
+        itemEl.className = "card-social-item";
+
+        const iconNode = createSocialIconElement(primarySocial);
+        if (iconNode) {
+          itemEl.appendChild(iconNode);
+        }
+
+        const handleEl = document.createElement("span");
+        handleEl.className = "card-social-handle";
+        handleEl.textContent = primarySocial.username;
+        itemEl.appendChild(handleEl);
+
+        socialsEl.appendChild(itemEl);
+        mainEl.appendChild(socialsEl);
+      }
+
       const nameEl = document.createElement("div");
       nameEl.className = "card-name";
       nameEl.textContent = name;
-      card.appendChild(nameEl);
+      mainEl.appendChild(nameEl);
+
+      card.appendChild(mainEl);
 
       if (name && (iconUrl || profileUrl || username)) {
         const iconEl = document.createElement("img");
