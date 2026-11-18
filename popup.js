@@ -1,49 +1,63 @@
-const ROLE_PRIORITY = {
-  Listener: 1,
-  Speaker: 2,
-  Organizer: 3
-};
-
-function detectRoleFromSection(element) {
-  const section = element.closest(".participation_table_area, .participants_table, table");
-  const labelEl = section
-    ? section.querySelector("thead .label_ptype_name") || section.querySelector("thead th")
-    : null;
-  const labelText = (labelEl?.textContent || "").trim();
-
-  if (/管理者|運営|主催|スタッフ|organizer|staff|admin/i.test(labelText)) {
-    return "Organizer";
-  }
-  if (/登壇|発表|LT|スピーカー|speaker|talk/i.test(labelText)) {
-    return "Speaker";
-  }
-  if (element.closest(".concerned_area")) {
-    return "Organizer";
-  }
-  return "Listener";
-}
-
 function extractParticipantsFromDOM() {
+  const ROLE_PRIORITY = {
+    Listener: 1,
+    Speaker: 2,
+    Organizer: 3
+  };
+
+  function detectRoleFromSection(element) {
+    const section = element.closest(
+      ".participation_table_area, .participants_table, .concerned_area, table"
+    );
+    const labelEl = section
+      ? section.querySelector("thead .label_ptype_name, thead th, h2, h3, .title")
+      : null;
+    const labelText = (labelEl?.textContent || "").trim();
+
+    if (/管理者|運営|主催|スタッフ|organizer|staff|admin/i.test(labelText)) {
+      return "Organizer";
+    }
+    if (/登壇|発表|LT|スピーカー|speaker|talk/i.test(labelText)) {
+      return "Speaker";
+    }
+    if (element.closest(".concerned_area")) {
+      return "Organizer";
+    }
+    return "Listener";
+  }
+
   const participantMap = new Map();
 
-  // 関係者枠および #participants 配下の参加枠から参加者名・アイコン・枠種別を取得
+  // 関係者枠および参加枠から参加者名・アイコン・枠種別を取得（tr.user の有無に関わらず取得）
   const selectors = [
-    ".concerned_area .participants_table tbody .user .display_name a",
-    "#participants .participation_table_area tbody .user .display_name a",
-    ".participation_table_area tbody .user .display_name a"
+    ".concerned_area .display_name a",
+    "#participants .participation_table_area .display_name a",
+    ".participation_table_area .display_name a",
+    ".applicant_area .participants_table .display_name a",
+    ".participants_table .display_name a"
   ];
 
   const anchors = document.querySelectorAll(selectors.join(", "));
   for (const a of anchors) {
-    // キャンセル枠 (.cancel_table_area 等) があれば除外
-    if (a.closest(".cancel_table_area, .waitlist_table_area")) continue;
+    // キャンセル枠・補欠枠があれば除外
+    if (a.closest(".cancel_table_area, .waitlist_table_area, .cancelled_table_area")) {
+      continue;
+    }
+
+    const section = a.closest(".participation_table_area, .participants_table, table");
+    const headerText = (
+      section?.querySelector("thead .label_ptype_name, thead th")?.textContent || ""
+    ).trim();
+    if (/キャンセル|補欠|cancel|waitlist/i.test(headerText)) {
+      continue;
+    }
 
     const name = (a.textContent || "").trim();
     const key = a.getAttribute("href") || name;
     if (!name) continue;
 
     const role = detectRoleFromSection(a);
-    const row = a.closest("tr.user, tr, .user_info") || a.parentElement;
+    const row = a.closest("tr.user, tr, .user_info, li") || a.parentElement;
     const img = row
       ? row.querySelector("td.user_info img, .image_link img, .user_image img, img")
       : null;
