@@ -15,6 +15,7 @@ const TA_RANDOM_COLORS = [
 ];
 
 let cachedParticipants = [];
+const highResIconCache = new Map();
 
 function pickRandomTaColor() {
   const index = Math.floor(Math.random() * TA_RANDOM_COLORS.length);
@@ -32,14 +33,157 @@ function normalizeRole(role, hasName) {
 }
 
 function normalizeParticipant(entry) {
-  if (!entry) return { name: "", iconUrl: "", role: "" };
-  if (typeof entry === "string") return { name: entry, iconUrl: "", role: "Listener" };
+  if (!entry) return { name: "", iconUrl: "", profileUrl: "", role: "" };
+  if (typeof entry === "string") {
+    return { name: entry, iconUrl: "", profileUrl: "", role: "Listener" };
+  }
   const name = typeof entry.name === "string" ? entry.name : "";
   return {
     name,
     iconUrl: typeof entry.iconUrl === "string" ? entry.iconUrl : "",
+    profileUrl: typeof entry.profileUrl === "string" ? entry.profileUrl : "",
     role: normalizeRole(entry.role, Boolean(name))
   };
+}
+
+function extractHighResAvatarFromProfileHtml(html, baseUrl) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+
+  const candidateSelectors = [
+    ".user_profile_area img",
+    ".profile_area img",
+    "#side_area .image_link img",
+    "#main .image_link img",
+    ".avatar img",
+    "a.image_link img",
+    "img[src*='media.connpass.com/thumbs/']"
+  ];
+
+  let bestImgUrl = "";
+  let bestSize = 0;
+
+  for (const img of doc.querySelectorAll(candidateSelectors.join(", "))) {
+    // ヘッダー内のログイン中ユーザーのアイコンや、イベント・グループ一覧のサムネイルは除外
+    if (img.closest("header, #header, .header_area, nav, .global_header")) continue;
+    if (
+      img.closest(
+        ".event_list, .group_list, .schedule_area, .concerned_area, .participation_table_area, table"
+      )
+    ) {
+      continue;
+    }
+
+    const rawSrc = img.getAttribute("src") || "";
+    if (!rawSrc || rawSrc.includes("connpass_logo")) continue;
+
+    let resolvedSrc = rawSrc;
+    try {
+      resolvedSrc = new URL(rawSrc, baseUrl).href;
+    } catch {
+      resolvedSrc = rawSrc;
+    }
+
+    const w = Number(img.getAttribute("width")) || 0;
+    const h = Number(img.getAttribute("height")) || 0;
+    const size = Math.max(w, h);
+
+    if (size > bestSize) {
+      bestSize = size;
+      bestImgUrl = resolvedSrc;
+    } else if (!bestImgUrl && resolvedSrc.includes("media.connpass.com/thumbs/")) {
+      bestImgUrl = resolvedSrc;
+    }
+  }
+
+  if (bestImgUrl && bestSize >= 80) {
+    return bestImgUrl;
+  }
+
+  // og:image / twitter:image から高解像度サムネイルを取得
+  const ogImage =
+    doc.querySelector("meta[property='og:image']")?.getAttribute("content") ||
+    doc.querySelector("meta[name='twitter:image']")?.getAttribute("content") ||
+    "";
+  if (
+    ogImage &&
+    ogImage.includes("media.connpass.com/thumbs/") &&
+    !ogImage.includes("connpass_logo")
+  ) {
+    return ogImage;
+  }
+
+  return bestImgUrl || "";
+}
+
+async function fetchHighResIconUrl(profileUrl) {
+  if (!profileUrl) return "";
+  if (highResIconCache.has(profileUrl)) {
+    return highResIconCache.get(profileUrl);
+  }
+
+  // サブドメイン URL と connpass.com 本体 URL の両方を候補にする
+  const urlsToTry = [profileUrl];
+  try {
+    const parsed = new URL(profileUrl);
+    if (parsed.hostname.endsWith(".connpass.com")) {
+      urlsToTry.unshift(`https://connpass.com${parsed.pathname}`);
+    }
+  } catch {
+    // ignore
+  }
+
+  for (const url of urlsToTry) {
+    try {
+      const res = await fetch(url, { credentials: "omit" });
+      if (!res.ok) continue;
+      const html = await res.text();
+      const highRes = extractHighResAvatarFromProfileHtml(html, url);
+      if (highRes) {
+        highResIconCache.set(profileUrl, highRes);
+        return highRes;
+      }
+    } catch {
+      // ignore and try next candidate
+    }
+  }
+
+  highResIconCache.set(profileUrl, "");
+  return "";
+}
+
+async function upgradeParticipantIconsToHighRes(participants, imgElementsByProfileUrl) {
+  const targets = participants.filter(
+    (p) => p && typeof p === "object" && p.profileUrl && !p.highResResolved
+  );
+  if (targets.length === 0) return;
+
+  const CONCURRENCY = 5;
+  let cursor = 0;
+  let updatedAny = false;
+
+  async function worker() {
+    while (cursor < targets.length) {
+      const target = targets[cursor++];
+      const highResUrl = await fetchHighResIconUrl(target.profileUrl);
+      target.highResResolved = true;
+      if (highResUrl && highResUrl !== target.iconUrl) {
+        target.iconUrl = highResUrl;
+        updatedAny = true;
+        const imgs = imgElementsByProfileUrl.get(target.profileUrl) || [];
+        for (const imgEl of imgs) {
+          imgEl.src = highResUrl;
+        }
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, targets.length) }, () => worker())
+  );
+
+  if (updatedAny && typeof chrome !== "undefined" && chrome.storage?.local) {
+    chrome.storage.local.set({ participants });
+  }
 }
 
 function getBadgeModifierClass(role) {
@@ -179,7 +323,6 @@ function appendPatternDecorations(card, patternNumber) {
     accent.classList.add("ta-pos-10a");
     decor.append(grid, accent);
   } else if (patternNumber === 11) {
-    // #11: #3（右下背景の大きな透かし「田」）＋ #6（右上の大小散らし小紋＋左下の10色ランダム「田」）
     const watermark = createTaSymbolSvg();
     watermark.classList.add("ta-pos-3a");
 
@@ -206,6 +349,7 @@ function renderSheets(participants) {
   const patternNumber = Number(patternSelect?.value) || 11;
 
   sheetsContainer.innerHTML = "";
+  const imgElementsByProfileUrl = new Map();
 
   const totalPages = Math.max(1, Math.ceil(participants.length / CARDS_PER_PAGE));
   summaryEl.textContent = `参加者 ${participants.length} 名 / A4縦 ${totalPages} ページ（1ページ10枚）`;
@@ -220,7 +364,7 @@ function renderSheets(participants) {
     );
 
     for (let i = 0; i < CARDS_PER_PAGE; i++) {
-      const { name, iconUrl, role } = normalizeParticipant(slice[i]);
+      const { name, iconUrl, profileUrl, role } = normalizeParticipant(slice[i]);
       const card = document.createElement("div");
       card.className = "card";
 
@@ -249,15 +393,24 @@ function renderSheets(participants) {
       nameEl.textContent = name;
       card.appendChild(nameEl);
 
-      if (name && iconUrl) {
+      if (name && (iconUrl || profileUrl)) {
         const iconEl = document.createElement("img");
         iconEl.className = "card-icon";
-        iconEl.src = iconUrl;
+        if (iconUrl) {
+          iconEl.src = iconUrl;
+        }
         iconEl.alt = "";
         iconEl.addEventListener("error", () => {
           iconEl.remove();
         });
         card.appendChild(iconEl);
+
+        if (profileUrl) {
+          if (!imgElementsByProfileUrl.has(profileUrl)) {
+            imgElementsByProfileUrl.set(profileUrl, []);
+          }
+          imgElementsByProfileUrl.get(profileUrl).push(iconEl);
+        }
       }
 
       sheet.appendChild(card);
@@ -265,6 +418,8 @@ function renderSheets(participants) {
 
     sheetsContainer.appendChild(sheet);
   }
+
+  upgradeParticipantIconsToHighRes(participants, imgElementsByProfileUrl);
 }
 
 document.getElementById("print-btn").addEventListener("click", () => {

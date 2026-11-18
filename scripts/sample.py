@@ -46,7 +46,7 @@ def make_avatar_data_url(label: str, index: int) -> str:
     color = PALETTE[index % len(PALETTE)]
     initial = html.escape(label.strip()[:1] or "?")
     svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">'
+        '<svg xmlns="http://www.w3.org/2000/svg" width="360" height="360" viewBox="0 0 120 120">'
         f'<rect width="120" height="120" fill="{color}"/>'
         '<text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" '
         'fill="#ffffff" font-family="sans-serif" font-size="56" font-weight="bold">'

@@ -28,7 +28,7 @@ function extractParticipantsFromDOM() {
 
   const participantMap = new Map();
 
-  // 関係者枠および参加枠から参加者名・アイコン・枠種別を取得（tr.user の有無に関わらず取得）
+  // 関係者枠および参加枠から参加者名・アイコン・プロフィールURL・枠種別を取得
   const selectors = [
     ".concerned_area .display_name a",
     "#participants .participation_table_area .display_name a",
@@ -53,8 +53,18 @@ function extractParticipantsFromDOM() {
     }
 
     const name = (a.textContent || "").trim();
-    const key = a.getAttribute("href") || name;
+    const rawHref = a.getAttribute("href") || "";
+    const key = rawHref || name;
     if (!name) continue;
+
+    let profileUrl = "";
+    if (rawHref && rawHref.includes("/user/")) {
+      try {
+        profileUrl = new URL(rawHref, location.origin).href;
+      } catch {
+        profileUrl = "";
+      }
+    }
 
     const role = detectRoleFromSection(a);
     const row = a.closest("tr.user, tr, .user_info, li") || a.parentElement;
@@ -71,8 +81,11 @@ function extractParticipantsFromDOM() {
       if (!existing.iconUrl && iconUrl) {
         existing.iconUrl = iconUrl;
       }
+      if (!existing.profileUrl && profileUrl) {
+        existing.profileUrl = profileUrl;
+      }
     } else {
-      participantMap.set(key, { name, iconUrl, role });
+      participantMap.set(key, { name, iconUrl, profileUrl, role });
     }
   }
 

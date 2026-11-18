@@ -195,6 +195,8 @@ body {
   width: 22mm;
   height: 22mm;
   border-radius: 50%;
+  border: 3px solid #999;
+  background: #fff;
   object-fit: cover;
   flex-shrink: 0;
   display: block;
