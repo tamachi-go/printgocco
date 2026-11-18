@@ -8,13 +8,10 @@
     "scripting",
     "storage"
   ],
-<<<<<<< HEAD
   "host_permissions": [
     "https://*.connpass.com/*",
     "https://connpass.com/*"
   ],
-=======
->>>>>>> 5beb763 (initial commit)
   "action": {
     "default_popup": "popup.html",
     "default_title": "参加者名刺を印刷"

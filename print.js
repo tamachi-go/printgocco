@@ -15,10 +15,7 @@ const TA_RANDOM_COLORS = [
 ];
 
 let cachedParticipants = [];
-<<<<<<< HEAD
 const highResIconCache = new Map();
-=======
->>>>>>> 5beb763 (initial commit)
 
 function pickRandomTaColor() {
   const index = Math.floor(Math.random() * TA_RANDOM_COLORS.length);
@@ -36,28 +33,19 @@ function normalizeRole(role, hasName) {
 }
 
 function normalizeParticipant(entry) {
-<<<<<<< HEAD
   if (!entry) return { name: "", iconUrl: "", profileUrl: "", role: "" };
   if (typeof entry === "string") {
     return { name: entry, iconUrl: "", profileUrl: "", role: "Listener" };
   }
-=======
-  if (!entry) return { name: "", iconUrl: "", role: "" };
-  if (typeof entry === "string") return { name: entry, iconUrl: "", role: "Listener" };
->>>>>>> 5beb763 (initial commit)
   const name = typeof entry.name === "string" ? entry.name : "";
   return {
     name,
     iconUrl: typeof entry.iconUrl === "string" ? entry.iconUrl : "",
-<<<<<<< HEAD
     profileUrl: typeof entry.profileUrl === "string" ? entry.profileUrl : "",
-=======
->>>>>>> 5beb763 (initial commit)
     role: normalizeRole(entry.role, Boolean(name))
   };
 }
 
-<<<<<<< HEAD
 function extractHighResAvatarFromProfileHtml(html, baseUrl) {
   const doc = new DOMParser().parseFromString(html, "text/html");
 
@@ -198,8 +186,6 @@ async function upgradeParticipantIconsToHighRes(participants, imgElementsByProfi
   }
 }
 
-=======
->>>>>>> 5beb763 (initial commit)
 function getBadgeModifierClass(role) {
   if (role === "Organizer") return "card-badge--organizer";
   if (role === "Speaker") return "card-badge--speaker";
@@ -337,10 +323,6 @@ function appendPatternDecorations(card, patternNumber) {
     accent.classList.add("ta-pos-10a");
     decor.append(grid, accent);
   } else if (patternNumber === 11) {
-<<<<<<< HEAD
-=======
-    // #11: #3（右下背景の大きな透かし「田」）＋ #6（右上の大小散らし小紋＋左下の10色ランダム「田」）
->>>>>>> 5beb763 (initial commit)
     const watermark = createTaSymbolSvg();
     watermark.classList.add("ta-pos-3a");
 
@@ -367,10 +349,7 @@ function renderSheets(participants) {
   const patternNumber = Number(patternSelect?.value) || 11;
 
   sheetsContainer.innerHTML = "";
-<<<<<<< HEAD
   const imgElementsByProfileUrl = new Map();
-=======
->>>>>>> 5beb763 (initial commit)
 
   const totalPages = Math.max(1, Math.ceil(participants.length / CARDS_PER_PAGE));
   summaryEl.textContent = `参加者 ${participants.length} 名 / A4縦 ${totalPages} ページ（1ページ10枚）`;
@@ -385,11 +364,7 @@ function renderSheets(participants) {
     );
 
     for (let i = 0; i < CARDS_PER_PAGE; i++) {
-<<<<<<< HEAD
       const { name, iconUrl, profileUrl, role } = normalizeParticipant(slice[i]);
-=======
-      const { name, iconUrl, role } = normalizeParticipant(slice[i]);
->>>>>>> 5beb763 (initial commit)
       const card = document.createElement("div");
       card.className = "card";
 
@@ -418,25 +393,17 @@ function renderSheets(participants) {
       nameEl.textContent = name;
       card.appendChild(nameEl);
 
-<<<<<<< HEAD
       if (name && (iconUrl || profileUrl)) {
         const iconEl = document.createElement("img");
         iconEl.className = "card-icon";
         if (iconUrl) {
           iconEl.src = iconUrl;
         }
-=======
-      if (name && iconUrl) {
-        const iconEl = document.createElement("img");
-        iconEl.className = "card-icon";
-        iconEl.src = iconUrl;
->>>>>>> 5beb763 (initial commit)
         iconEl.alt = "";
         iconEl.addEventListener("error", () => {
           iconEl.remove();
         });
         card.appendChild(iconEl);
-<<<<<<< HEAD
 
         if (profileUrl) {
           if (!imgElementsByProfileUrl.has(profileUrl)) {
@@ -444,8 +411,6 @@ function renderSheets(participants) {
           }
           imgElementsByProfileUrl.get(profileUrl).push(iconEl);
         }
-=======
->>>>>>> 5beb763 (initial commit)
       }
 
       sheet.appendChild(card);
@@ -453,11 +418,8 @@ function renderSheets(participants) {
 
     sheetsContainer.appendChild(sheet);
   }
-<<<<<<< HEAD
 
   upgradeParticipantIconsToHighRes(participants, imgElementsByProfileUrl);
-=======
->>>>>>> 5beb763 (initial commit)
 }
 
 document.getElementById("print-btn").addEventListener("click", () => {
