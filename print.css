@@ -126,6 +126,7 @@ body {
 .card:nth-child(2n) {
   border-left: none;
 }
+
 .card:nth-child(n + 3) {
   border-top: none;
 }
@@ -226,6 +227,7 @@ body {
   color: var(--stamp-red);
   opacity: 0.85;
 }
+
 .ta-pos-1b {
   bottom: 3.5mm;
   left: 4.5mm;
@@ -244,6 +246,7 @@ body {
   color: var(--gopher-cyan);
   opacity: 0.75;
 }
+
 .ta-pos-2b {
   top: 5.8mm;
   right: 9.5mm;
@@ -252,6 +255,7 @@ body {
   color: var(--gopher-teal);
   opacity: 0.45;
 }
+
 .ta-pos-2c {
   bottom: 2.6mm;
   left: 3.5mm;
@@ -271,6 +275,7 @@ body {
   opacity: 0.12;
   transform: rotate(-12deg);
 }
+
 .ta-pos-3b {
   top: 4mm;
   right: 5mm;
@@ -288,6 +293,7 @@ body {
   height: 6.5mm;
   opacity: 0.9;
 }
+
 .ta-pos-4b {
   bottom: 3.2mm;
   left: 4.5mm;
@@ -307,16 +313,19 @@ body {
   justify-content: center;
   z-index: 3;
 }
+
 .ta-slit .ta-symbol {
   position: static;
   width: 4.6mm;
   height: 4.6mm;
   color: var(--gopher-teal);
 }
+
 .ta-pos-5a {
   top: 0;
   right: 8mm;
 }
+
 .ta-pos-5b {
   bottom: 0;
   left: 8mm;
@@ -332,6 +341,7 @@ body {
   opacity: 0.65;
   transform: rotate(8deg);
 }
+
 .ta-pos-6b {
   top: 10.5mm;
   right: 12mm;
@@ -341,6 +351,7 @@ body {
   opacity: 0.4;
   transform: rotate(-10deg);
 }
+
 .ta-pos-6c {
   bottom: 3.5mm;
   left: 5.5mm;
@@ -359,6 +370,7 @@ body {
   color: var(--gopher-teal);
   opacity: 0.55;
 }
+
 .ta-pos-7b {
   top: 2.8mm;
   right: 8.2mm;
@@ -367,6 +379,7 @@ body {
   color: var(--gopher-cyan);
   opacity: 0.4;
 }
+
 .ta-pos-7c {
   top: 8mm;
   right: 3mm;
@@ -375,6 +388,7 @@ body {
   color: var(--gopher-cyan);
   opacity: 0.4;
 }
+
 .ta-pos-7d {
   bottom: 2.8mm;
   left: 3mm;
@@ -393,6 +407,7 @@ body {
   color: var(--gopher-cyan);
   opacity: 0.75;
 }
+
 .ta-pos-8b {
   bottom: 3mm;
   left: 9.8mm;
@@ -401,6 +416,7 @@ body {
   color: var(--gopher-teal);
   opacity: 0.55;
 }
+
 .ta-pos-8c {
   bottom: 3mm;
   left: 15.1mm;
@@ -409,6 +425,7 @@ body {
   color: var(--gopher-cyan);
   opacity: 0.35;
 }
+
 .ta-pos-8d {
   top: 4mm;
   right: 4.5mm;
@@ -428,6 +445,7 @@ body {
   opacity: 0.7;
   transform: rotate(45deg);
 }
+
 .ta-pos-9b {
   top: 4.8mm;
   right: 12.5mm;
@@ -437,6 +455,7 @@ body {
   opacity: 0.45;
   transform: rotate(45deg);
 }
+
 .ta-pos-9c {
   bottom: 3.8mm;
   left: 5mm;
@@ -451,9 +470,11 @@ body {
 .card--pattern-10::before {
   box-shadow: 0 0.9mm 0 #fff, 0 1.35mm 0 var(--gopher-cyan);
 }
+
 .card--pattern-10::after {
   box-shadow: 0 -0.9mm 0 #fff, 0 -1.35mm 0 var(--gopher-cyan);
 }
+
 .ta-grid-10 {
   position: absolute;
   bottom: 3.2mm;
@@ -465,11 +486,13 @@ body {
   opacity: 0.25;
   color: var(--gopher-teal);
 }
+
 .ta-grid-10 .ta-symbol {
   position: static;
   width: 4mm;
   height: 4mm;
 }
+
 .ta-pos-10a {
   top: 4.2mm;
   right: 4.5mm;
@@ -495,9 +518,11 @@ body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+
   .no-print {
     display: none !important;
   }
+
   .sheet {
     margin: 0;
     box-shadow: none;
