@@ -199,25 +199,20 @@ def generate_sample_files(count: int) -> None:
 {render_rows(admins)}
       </tbody>
     </table>
+
+    <table class="participants_table">
+      <thead>
+        <tr>
+          <th>発表者<span class="participants_count">{len(lt_speakers)}人</span></th>
+        </tr>
+      </thead>
+      <tbody>
+{render_rows(lt_speakers)}
+      </tbody>
+    </table>
   </div>
 
   <div id="participants">
-    <div class="participation_table_area">
-      <table class="participants_table">
-        <thead>
-          <tr>
-            <th>
-              <span class="label_ptype_name">登壇枠</span>
-              <span class="participants_count">{len(lt_speakers)}人</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-{render_rows(lt_speakers)}
-        </tbody>
-      </table>
-    </div>
-
     <div class="participation_table_area">
       <table class="participants_table">
         <thead>

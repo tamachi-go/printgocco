@@ -1,64 +1,189 @@
-function extractParticipantsFromDOM() {
+async function extractParticipantsFromDOM() {
+  // 優先順位: Speaker > Organizer > Listener
   const ROLE_PRIORITY = {
     Listener: 1,
-    Speaker: 2,
-    Organizer: 3
+    Organizer: 2,
+    Speaker: 3
   };
 
-  function detectRoleFromSection(element) {
-    const section = element.closest(
-      ".participation_table_area, .participants_table, .concerned_area, table"
-    );
-    const labelEl = section
-      ? section.querySelector("thead .label_ptype_name, thead th, h2, h3, .title")
-      : null;
-    const labelText = (labelEl?.textContent || "").trim();
+  function extractCleanTitleFromTh(th) {
+    const ptype = th.querySelector(".label_ptype_name");
+    if (ptype) {
+      return (ptype.textContent || "").trim();
+    }
+    const clone = th.cloneNode(true);
+    for (const el of clone.querySelectorAll(".participants_count, small, a")) {
+      el.remove();
+    }
+    return (clone.textContent || "").trim();
+  }
 
-    if (/管理者|運営|主催|スタッフ|organizer|staff|admin/i.test(labelText)) {
+  function getHeaderTitleForRow(row) {
+    // 1. 同じ tbody 内でこの行より上にある th ヘッダー行を探す
+    let prevRow = row.previousElementSibling;
+    while (prevRow) {
+      const th = prevRow.querySelector("th");
+      if (th) return extractCleanTitleFromTh(th);
+      prevRow = prevRow.previousElementSibling;
+    }
+
+    // 2. この行が属する tbody の直前の thead を探す（1つの table に複数 thead/tbody がある場合に対応）
+    const tbody = row.closest("tbody");
+    if (tbody) {
+      let prevSection = tbody.previousElementSibling;
+      while (prevSection) {
+        if (prevSection.tagName === "THEAD") {
+          const th = prevSection.querySelector("th");
+          if (th) return extractCleanTitleFromTh(th);
+        }
+        const th = prevSection.querySelector?.("th");
+        if (th) return extractCleanTitleFromTh(th);
+        prevSection = prevSection.previousElementSibling;
+      }
+    }
+
+    // 3. table 内の thead th
+    const table = row.closest("table");
+    if (table) {
+      const th = table.querySelector("thead th, tr:first-child th");
+      if (th) return extractCleanTitleFromTh(th);
+    }
+
+    // 4. .participation_table_area 内の .label_ptype_name
+    const area = row.closest(".participation_table_area");
+    if (area) {
+      const ptype = area.querySelector(".label_ptype_name");
+      if (ptype) return (ptype.textContent || "").trim();
+    }
+
+    return "";
+  }
+
+  function detectRoleFromHeaderTitle(headerTitle) {
+    const title = headerTitle.trim();
+    // Organizerは「管理者」の表にいる人
+    if (/^管理者/.test(title)) {
       return "Organizer";
     }
-    if (/登壇|発表|LT|スピーカー|speaker|talk/i.test(labelText)) {
+    // Speakerは「発表者」の表にいる人
+    if (/^発表者/.test(title)) {
       return "Speaker";
     }
-    if (element.closest(".concerned_area")) {
-      return "Organizer";
-    }
+    // その他はそれ以外
     return "Listener";
+  }
+
+  function parseHighResAvatarFromProfileHtml(html, username, baseUrl) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const candidates = [];
+
+    for (const img of doc.querySelectorAll("img")) {
+      // ヘッダー・フッター内のログイン中ユーザーアイコン等を除外
+      if (
+        img.closest(
+          "header, #header, .header_area, nav, .global_header, footer, #footer"
+        )
+      ) {
+        continue;
+      }
+      // イベント一覧やグループ一覧内のサムネイルを除外
+      if (
+        img.closest(
+          ".event_list, .group_list, .schedule_area, .concerned_area, .participation_table_area"
+        )
+      ) {
+        continue;
+      }
+
+      const rawSrc = img.getAttribute("src") || "";
+      if (!rawSrc || !rawSrc.includes("/thumbs/") || rawSrc.includes("connpass_logo")) {
+        continue;
+      }
+
+      const parentLink = img.closest("a[href]");
+      if (parentLink) {
+        try {
+          const linkUrl = new URL(parentLink.getAttribute("href"), baseUrl);
+          // イベントへのリンク画像は除外
+          if (linkUrl.pathname.includes("/event/")) continue;
+          // グループトップページへのリンク画像は除外
+          if (linkUrl.pathname === "/" || linkUrl.pathname === "") continue;
+          // 別ユーザーへのリンク画像は除外
+          if (
+            username &&
+            linkUrl.pathname.includes("/user/") &&
+            !linkUrl.pathname.toLowerCase().includes(`/user/${username.toLowerCase()}`)
+          ) {
+            continue;
+          }
+        } catch {
+          // ignore URL parse error
+        }
+      }
+
+      let resolvedSrc = rawSrc;
+      try {
+        resolvedSrc = new URL(rawSrc, baseUrl).href;
+      } catch {
+        resolvedSrc = rawSrc;
+      }
+
+      candidates.push(resolvedSrc);
+    }
+
+    if (candidates.length > 0) {
+      return candidates[0];
+    }
+
+    const ogImage =
+      doc.querySelector("meta[property='og:image']")?.getAttribute("content") ||
+      doc.querySelector("meta[name='twitter:image']")?.getAttribute("content") ||
+      "";
+    if (ogImage && ogImage.includes("/thumbs/") && !ogImage.includes("connpass_logo")) {
+      return ogImage;
+    }
+
+    return "";
   }
 
   const participantMap = new Map();
 
-  // 関係者枠および参加枠から参加者名・アイコン・プロフィールURL・枠種別を取得
-  const selectors = [
-    ".concerned_area .display_name a",
-    "#participants .participation_table_area .display_name a",
-    ".participation_table_area .display_name a",
-    ".applicant_area .participants_table .display_name a",
-    ".participants_table .display_name a"
-  ];
+  // 参加者テーブル内の各ユーザー行を走査
+  const rows = document.querySelectorAll(
+    ".concerned_area .participants_table tbody tr, #participants .participation_table_area tbody tr, .participation_table_area tbody tr, .participants_table tbody tr"
+  );
 
-  const anchors = document.querySelectorAll(selectors.join(", "));
-  for (const a of anchors) {
-    // キャンセル枠・補欠枠があれば除外
-    if (a.closest(".cancel_table_area, .waitlist_table_area, .cancelled_table_area")) {
+  for (const row of rows) {
+    // 「もっと見る」行やヘッダー行は除外
+    if (row.classList.contains("empty") || row.querySelector("th")) continue;
+    // キャンセル枠・補欠枠は除外
+    if (row.closest(".cancel_table_area, .waitlist_table_area, .cancelled_table_area")) {
       continue;
     }
 
-    const section = a.closest(".participation_table_area, .participants_table, table");
-    const headerText = (
-      section?.querySelector("thead .label_ptype_name, thead th")?.textContent || ""
-    ).trim();
-    if (/キャンセル|補欠|cancel|waitlist/i.test(headerText)) {
+    const headerTitle = getHeaderTitleForRow(row);
+    if (/^(キャンセル|補欠)|cancel|waitlist/i.test(headerTitle)) {
       continue;
     }
+
+    const a = row.querySelector(".display_name a");
+    if (!a) continue;
 
     const name = (a.textContent || "").trim();
-    const rawHref = a.getAttribute("href") || "";
-    const key = rawHref || name;
     if (!name) continue;
 
+    const rawHref =
+      a.getAttribute("href") ||
+      row.querySelector("a.image_link")?.getAttribute("href") ||
+      "";
+    const userMatch = rawHref.match(/\/user\/([^/?#]+)/);
+    const username = userMatch ? userMatch[1] : "";
+    const key = username ? `user:${username.toLowerCase()}` : `name:${name}`;
+
     let profileUrl = "";
-    if (rawHref && rawHref.includes("/user/")) {
+    if (username) {
+      profileUrl = `${location.origin}/user/${username}/`;
+    } else if (rawHref) {
       try {
         profileUrl = new URL(rawHref, location.origin).href;
       } catch {
@@ -66,15 +191,13 @@ function extractParticipantsFromDOM() {
       }
     }
 
-    const role = detectRoleFromSection(a);
-    const row = a.closest("tr.user, tr, .user_info, li") || a.parentElement;
-    const img = row
-      ? row.querySelector("td.user_info img, .image_link img, .user_image img, img")
-      : null;
+    const role = detectRoleFromHeaderTitle(headerTitle);
+    const img = row.querySelector("td.user_info img, .image_link img, .user_image img, img");
     const iconUrl = img?.src || "";
 
     if (participantMap.has(key)) {
       const existing = participantMap.get(key);
+      // 両方に登録がある場合は Speaker > Organizer > Listener の順で上書きし、重複エントリを作らない
       if ((ROLE_PRIORITY[role] || 0) > (ROLE_PRIORITY[existing.role] || 0)) {
         existing.role = role;
       }
@@ -85,11 +208,62 @@ function extractParticipantsFromDOM() {
         existing.profileUrl = profileUrl;
       }
     } else {
-      participantMap.set(key, { name, iconUrl, profileUrl, role });
+      participantMap.set(key, {
+        name,
+        username,
+        iconUrl,
+        profileUrl,
+        role,
+        highResResolved: false
+      });
     }
   }
 
-  return Array.from(participantMap.values());
+  const participants = Array.from(participantMap.values());
+
+  // 同一オリジン（現在のconnpassタブ内）からプロフィールページを並列取得して高解像度アイコンに差し替える
+  const targets = participants.filter((p) => p.profileUrl);
+  const CONCURRENCY = 6;
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < targets.length) {
+      const target = targets[cursor++];
+      const urlsToTry = [target.profileUrl];
+      if (target.username) {
+        const mainUrl = `https://connpass.com/user/${target.username}/`;
+        if (!urlsToTry.includes(mainUrl)) {
+          urlsToTry.push(mainUrl);
+        }
+      }
+
+      for (const url of urlsToTry) {
+        try {
+          const res = await fetch(url, { credentials: "same-origin" });
+          if (!res.ok) continue;
+          const html = await res.text();
+          const highRes = parseHighResAvatarFromProfileHtml(
+            html,
+            target.username,
+            url
+          );
+          if (highRes) {
+            target.iconUrl = highRes;
+            target.highResResolved = true;
+            break;
+          }
+        } catch {
+          // クロスオリジンリダイレクト等で失敗した場合は print.js 側でリトライ
+        }
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, targets.length) }, () => worker())
+  );
+
+  return participants;
 }
 
 function isSupportedUrl(urlString) {
@@ -118,6 +292,7 @@ async function init() {
   }
 
   try {
+    statusEl.textContent = "参加者と高解像度アイコンを取得中...";
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: extractParticipantsFromDOM
